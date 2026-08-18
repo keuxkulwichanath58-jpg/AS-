@@ -1,0 +1,256 @@
+-- ==========================================
+-- Akers Script Hub
+-- ==========================================
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Akers Hub",
+   LoadingTitle = "Akers Script Loading...",
+   LoadingSubtitle = "by Assistant",
+   ConfigurationSaving = { Enabled = false },
+   Discord = { Enabled = false },
+   KeySystem = false
+})
+
+local MainTab = Window:CreateTab("Main Menu", 4483362458)
+
+-- Services & Variables
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local WalkSpeedValue = 16
+local NoclipEnabled = false
+local InfiniteJumpEnabled = false
+local RoleESPEnabled = false
+local AimbotEnabled = false
+
+local NoclipConnection
+local RoleESPConnections = {}
+local AimbotConnection
+
+-- ==========================================
+-- 1. วิ่งเร็ว ( Speed Adjustment 1-100 )
+-- ==========================================
+MainTab:CreateSlider({
+   Name = "ความเร็วการเดิน (Speed 1-100)",
+   Range = {1, 100},
+   Increment = 1,
+   Suffix = "Speed",
+   CurrentValue = 16,
+   Flag = "SpeedSlider",
+   Callback = function(Value)
+      WalkSpeedValue = Value
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+         LocalPlayer.Character.Humanoid.WalkSpeed = WalkSpeedValue
+      end
+   end,
+})
+
+RunService.RenderStepped:Connect(function()
+   if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+      if LocalPlayer.Character.Humanoid.WalkSpeed ~= WalkSpeedValue then
+         LocalPlayer.Character.Humanoid.WalkSpeed = WalkSpeedValue
+      end
+   end
+end)
+
+-- ==========================================
+-- 2. เดินทะลุ ( Noclip )
+-- ==========================================
+MainTab:CreateToggle({
+   Name = "เดินทะลุสิ่งกีดขวาง (Noclip)",
+   CurrentValue = false,
+   Flag = "NoclipToggle",
+   Callback = function(Value)
+      NoclipEnabled = Value
+      if NoclipEnabled then
+         NoclipConnection = RunService.Stepped:Connect(function()
+            if LocalPlayer.Character then
+               for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                  if part:IsA("BasePart") then
+                     part.CanCollide = false
+                  end
+               end
+            end
+         end)
+      else
+         if NoclipConnection then
+            NoclipConnection:Disconnect()
+         end
+      end
+   end,
+})
+
+-- ==========================================
+-- 3. มองบทบาท ( Role ESP )
+-- ==========================================
+local function ClearRoleESP()
+   for _, conn in pairs(RoleESPConnections) do
+      if typeof(conn) == "RBXScriptConnection" then conn:Disconnect() end
+   end
+   RoleESPConnections = {}
+   for _, player in pairs(Players:GetPlayers()) do
+      if player.Character and player.Character:FindFirstChild("AkersESP") then
+         player.Character.AkersESP:Destroy()
+      end
+   end
+end
+
+local function UpdateRoleESP()
+   ClearRoleESP()
+   if not RoleESPEnabled then return end
+
+   for _, player in pairs(Players:GetPlayers()) do
+      if player ~= LocalPlayer and player.Character then
+         local char = player.Character
+         local highlight = Instance.new("Highlight")
+         highlight.Name = "AkersESP"
+         highlight.Parent = char
+         highlight.FillTransparency = 0.5
+         highlight.OutlineTransparency = 0
+
+         local isMurderer = false
+         local isSheriff = false
+
+         local items = {}
+         for _, item in pairs(player.Backpack:GetChildren()) do table.insert(items, item.Name:lower()) end
+         for _, item in pairs(char:GetChildren()) do if item:IsA("Tool") then table.insert(items, item.Name:lower()) end end
+
+         for _, itemName in pairs(items) do
+            if itemName:find("knife") or itemName:find("murder") or itemName:find("blade") or itemName:find("sword") then
+               isMurderer = true
+            elseif itemName:find("gun") or itemName:find("revolver") or itemName:find("sheriff") then
+               isSheriff = true
+            end
+         end
+
+         if isMurderer then
+            highlight.FillColor = Color3.fromRGB(255, 0, 0) -- สีแดง = ฆาตกร
+         elseif isSheriff then
+            highlight.FillColor = Color3.fromRGB(0, 100, 255) -- สีฟ้า = ตำรวจ/นายอำเภอ
+         else
+            highlight.FillColor = Color3.fromRGB(0, 255, 100) -- สีเขียว = คนธรรมดา
+         end
+      end
+   end
+end
+
+MainTab:CreateToggle({
+   Name = "มองบทบาท (Role ESP)",
+   CurrentValue = false,
+   Flag = "RoleESPToggle",
+   Callback = function(Value)
+      RoleESPEnabled = Value
+      if RoleESPEnabled then
+         UpdateRoleESP()
+         table.insert(RoleESPConnections, Players.PlayerAdded:Connect(function() task.wait(1) UpdateRoleESP() end))
+         table.insert(RoleESPConnections, Players.PlayerRemoving:Connect(UpdateRoleESP))
+      else
+         ClearRoleESP()
+      end
+   end,
+})
+
+-- ==========================================
+-- 4. กระโดดไม่จำกัด ( Infinite Jump )
+-- ==========================================
+MainTab:CreateToggle({
+   Name = "กระโดดไม่จำกัด (Infinite Jump)",
+   CurrentValue = false,
+   Flag = "InfJumpToggle",
+   Callback = function(Value)
+      InfiniteJumpEnabled = Value
+   end,
+})
+
+UserInputService.JumpRequest:Connect(function()
+   if InfiniteJumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+      LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
+   end
+end)
+
+-- ==========================================
+-- 5. ล็อกเป้าฆาตกร + เช็กกำแพง ( Killer Aimbot )
+-- ==========================================
+local function IsKiller(player)
+   if not player or not player.Character then return false end
+   local char = player.Character
+   local items = {}
+   for _, item in pairs(player.Backpack:GetChildren()) do table.insert(items, item.Name:lower()) end
+   for _, item in pairs(char:GetChildren()) do if item:IsA("Tool") then table.insert(items, item.Name:lower()) end end
+
+   for _, itemName in pairs(items) do
+      if itemName:find("knife") or itemName:find("murder") or itemName:find("blade") or itemName:find("sword") then
+         return true
+      end
+   end
+   if player:FindFirstChild("Role") and player.Role.Value == "Murderer" then
+      return true
+   end
+   return false
+end
+
+local function IsVisible(targetPart)
+   local origin = Camera.CFrame.Position
+   local direction = (targetPart.Position - origin)
+   local raycastParams = RaycastParams.new()
+   raycastParams.FilterType = RaycastFilterType.Exclude
+   raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+   
+   local result = Workspace:Raycast(origin, direction, raycastParams)
+   return (result and result.Instance:IsDescendantOf(targetPart.Parent)) or false
+end
+
+MainTab:CreateToggle({
+   Name = "ล็อกเป้าฆาตกร (Aimbot - Wall Check)",
+   CurrentValue = false,
+   Flag = "AimbotToggle",
+   Callback = function(Value)
+      AimbotEnabled = Value
+      if AimbotEnabled then
+         AimbotConnection = RunService.RenderStepped:Connect(function()
+            for _, player in pairs(Players:GetPlayers()) do
+               if player ~= LocalPlayer and IsKiller(player) then
+                  local targetChar = player.Character
+                  local head = targetChar and targetChar:FindFirstChild("Head")
+                  
+                  if head and IsVisible(head) then
+                     Camera.CFrame = CFrame.new(Camera.CFrame.Position, head.Position)
+                     break
+                  end
+               end
+            end
+         end)
+      else
+         if AimbotConnection then
+            AimbotConnection:Disconnect()
+         end
+      end
+   end,
+})
+
+-- ==========================================
+-- 6. ปุ่มเปิด/ปิด เมนูสคริปต์ ( Toggle UI Keybind )
+-- ==========================================
+MainTab:CreateKeybind({
+   Name = "ปุ่ม เปิด/ปิด เมนู Akers (Toggle GUI)",
+   CurrentKeybind = "K",
+   HoldToInteract = false,
+   Flag = "UIToggleKey",
+   Callback = function(Keybind)
+      Rayfield:ToggleUI()
+   end,
+})
+
+Rayfield:Notify({
+   Title = "Akers Loaded!",
+   Content = "สคริปต์ Akers ทำงานแล้ว กดปุ่ม K เพื่อเปิด/ปิด UI",
+   Duration = 5,
+   Image = 4483362458,
+})
