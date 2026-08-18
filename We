@@ -1,0 +1,147 @@
+-- ================================================
+-- Akers Script v1.0
+-- Created for Roblox
+-- ================================================
+
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("Akers Hub", "Midnight")
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Variables
+local WalkSpeedValue = 16
+local NoclipEnabled = false
+local InfiniteJumpEnabled = false
+local RoleESPEnabled = false
+local AimbotEnabled = false
+local AimbotTarget = nil
+
+-- Create Tabs
+local MainTab = Window:NewTab("Main Features")
+local MainSection = MainTab:NewSection("Player & Combat Options")
+
+-- ------------------------------------------------
+-- 1. ฟังก์ชั่น: วิ่งเร็ว (ปรับได้ 1 - 100)
+-- ------------------------------------------------
+MainSection:NewSlider("WalkSpeed (1-100)", "Adjust your movement speed", 100, 1, function(s)
+    WalkSpeedValue = s
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = WalkSpeedValue
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = WalkSpeedValue
+    end
+end)
+
+-- ------------------------------------------------
+-- 2. ฟังก์ชั่น: เดินทะลุ (มีปุ่มเปิด-ปิด)
+-- ------------------------------------------------
+MainSection:NewToggle("Noclip (เดินทะลุ)", "Walk through walls", function(state)
+    NoclipEnabled = state
+end)
+
+RunService.Stepped:Connect(function()
+    if NoclipEnabled and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- ------------------------------------------------
+-- 3. ฟังก์ชั่น: กระโดดไม่จำกัด
+-- ------------------------------------------------
+MainSection:NewToggle("Infinite Jump (โดดไม่จำกัด)", "Jump infinitely in the air", function(state)
+    InfiniteJumpEnabled = state
+end)
+
+UserInputService.JumpRequest:Connect(function()
+    if InfiniteJumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+        LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
+    end
+end)
+
+-- ------------------------------------------------
+-- Helper: หาฆาตกร (Murderer)
+-- ------------------------------------------------
+local function GetMurderer()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            -- เช็คจาก Tool มีด หรือค่า Role ในตัวผู้เล่น (MM2 Standard)
+            local backpack = player:FindFirstChild("Backpack")
+            local character = player.Character
+            if (backpack and (backpack:FindFirstChild("Knife") or backpack:FindFirstChild("Blade"))) or
+               (character and (character:FindFirstChild("Knife") or character:FindFirstChild("Blade"))) or
+               (player:FindFirstChild("Role") and player.Role.Value == "Murderer") then
+                return player
+            end
+        end
+    end
+    return nil
+end
+
+-- ------------------------------------------------
+-- 4. ฟังก์ชั่น: มองบทบาท (Role ESP)
+-- ------------------------------------------------
+MainSection:NewToggle("Role ESP (มองบทบาท)", "Highlight Murderer (Red), Sheriff (Blue), Innocent (Green)", function(state)
+    RoleESPEnabled = state
+    if not state then
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr.Character and plr.Character:FindFirstChild("Highlight") then
+                plr.Character.Highlight:Destroy()
+            end
+        end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if RoleESPEnabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                local highlight = player.Character:FindFirstChild("Highlight") or Instance.new("Highlight", player.Character)
+                highlight.OutlineTransparency = 0
+                highlight.FillTransparency = 0.5
+                
+                -- ตรวจสอบบทบาทแล้วใส่สี Highlight
+                local backpack = player:FindFirstChild("Backpack")
+                local char = player.Character
+                
+                if (backpack and backpack:FindFirstChild("Knife")) or (char and char:FindFirstChild("Knife")) then
+                    highlight.FillColor = Color3.fromRGB(255, 0, 0) -- ฆาตกร (สีแดง)
+                elseif (backpack and backpack:FindFirstChild("Gun")) or (char and char:FindFirstChild("Gun")) then
+                    highlight.FillColor = Color3.fromRGB(0, 0, 255) -- นายอำเภอ/ถือปืน (สีน้ำเงิน)
+                else
+                    highlight.FillColor = Color3.fromRGB(0, 255, 0) -- คนบริสุทธิ์ (สีเขียว)
+                end
+            end
+        end
+    end
+end)
+
+-- ------------------------------------------------
+-- 5. ฟังก์ชั่น: ล็อกเป้า (เฉพาะฆาตกร)
+-- ------------------------------------------------
+MainSection:NewToggle("Aimbot Murderer (ล็อกเป้าฆาตกร)", "Automatically lock camera to Murderer", function(state)
+    AimbotEnabled = state
+end)
+
+RunService.RenderStepped:Connect(function()
+    if AimbotEnabled then
+        local murderer = GetMurderer()
+        if murderer and murderer.Character and murderer.Character:FindFirstChild("Head") then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, murderer.Character.Head.Position)
+        end
+    end
+end)
+
+Library:Notify("Akers Script", "Loaded Successfully!", 3)
